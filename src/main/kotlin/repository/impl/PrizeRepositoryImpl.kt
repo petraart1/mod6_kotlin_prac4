@@ -12,6 +12,8 @@ import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.andWhere
+import org.jetbrains.exposed.sql.batchInsert
+import org.jetbrains.exposed.sql.deleteAll
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.insertIgnore
@@ -62,6 +64,40 @@ class PrizeRepositoryImpl : PrizeRepository {
                         it[portraitUrl] = laureate.portraitUrl
                         it[sortOrder] = laureate.sortOrder
                     }
+                }
+            }
+        }
+    }
+
+    override fun replaceAllPrizes(prizes: List<Prize>) {
+        transaction {
+            LaureatesTable.deleteAll()
+            PrizesTable.deleteAll()
+
+            PrizesTable.batchInsert(prizes) { prize ->
+                this[PrizesTable.id] = prize.id
+                this[PrizesTable.awardYear] = prize.awardYear
+                this[PrizesTable.category] = prize.category.en
+                this[PrizesTable.fullName] = prize.categoryFullName?.en ?: prize.category.en
+                this[PrizesTable.motivation] = prize.laureates.firstNotNullOfOrNull { laureate -> laureate.motivation?.en }
+                this[PrizesTable.detailLink] = prize.detailLink
+                this[PrizesTable.dateAwarded] = prize.dateAwarded
+            }
+
+            val laureates = prizes.flatMap { prize ->
+                prize.laureates.map { laureate -> prize.id to laureate }
+            }
+
+            if (laureates.isNotEmpty()) {
+                LaureatesTable.batchInsert(laureates) { (prizeId, laureate) ->
+                    this[LaureatesTable.id] = laureate.id
+                    this[LaureatesTable.prizeId] = prizeId
+                    this[LaureatesTable.fullName] = laureate.fullName?.en ?: laureate.knownName?.en.orEmpty()
+                    this[LaureatesTable.knownName] = laureate.knownName?.en
+                    this[LaureatesTable.portion] = laureate.portion
+                    this[LaureatesTable.motivation] = laureate.motivation?.en
+                    this[LaureatesTable.portraitUrl] = laureate.portraitUrl
+                    this[LaureatesTable.sortOrder] = laureate.sortOrder
                 }
             }
         }

@@ -20,6 +20,7 @@ fun Application.configureRouting() {
     val authService = AuthService(userRepository, appConfig.jwt)
     val prizeService = PrizeService(prizeRepository, appConfig.nobel)
     val userService = UserService(userRepository)
+    prizeService.preloadCacheAtStartup()
 
     configureRouting(authService, prizeService, userService)
 }

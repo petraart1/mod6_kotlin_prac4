@@ -11,14 +11,18 @@ import com.prac.repository.PrizeRepository
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
+import io.ktor.client.request.parameter
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import org.slf4j.LoggerFactory
 import java.io.File
+import kotlin.system.measureTimeMillis
 
 class PrizeService(
     private val prizeRepository: PrizeRepository,
     private val nobelConfig: NobelConfig,
 ) {
+    private val logger = LoggerFactory.getLogger(PrizeService::class.java)
     private val json = Json { ignoreUnknownKeys = true }
     private val httpClient = HttpClient()
 
@@ -49,52 +53,112 @@ class PrizeService(
         prizeRepository.removeFavoritePrize(userId, prizeId)
     }
 
-    private fun refreshCacheIfNeeded() {
-        if (!prizeRepository.isEmpty() && !nobelConfig.refreshOnRead) {
+    fun preloadCacheAtStartup() {
+        val cacheIsEmpty = prizeRepository.isEmpty()
+        if (!cacheIsEmpty && !nobelConfig.refreshOnRead) {
+            logger.info("Skipping Nobel prizes preload on startup: cache already exists")
             return
         }
-        if (prizeRepository.isEmpty() || nobelConfig.refreshOnRead) {
+
+        var loadedCount = 0
+        val elapsedMs = measureTimeMillis {
+            val prizes = loadPrizes()
+            loadedCount = prizes.size
+            if (prizes.isNotEmpty()) {
+                if (cacheIsEmpty) {
+                    prizeRepository.replaceAllPrizes(prizes)
+                } else {
+                    prizeRepository.saveAllPrizes(prizes)
+                }
+            }
+        }
+
+        logger.info("Nobel prizes preload finished in {} ms, loaded {} prizes", elapsedMs, loadedCount)
+    }
+
+    private fun refreshCacheIfNeeded() {
+        val cacheIsEmpty = prizeRepository.isEmpty()
+        if (!cacheIsEmpty && !nobelConfig.refreshOnRead) {
+            return
+        }
+        if (cacheIsEmpty || nobelConfig.refreshOnRead) {
             val prizes = loadPrizes()
             if (prizes.isNotEmpty()) {
-                prizeRepository.saveAllPrizes(prizes)
+                if (cacheIsEmpty) {
+                    prizeRepository.replaceAllPrizes(prizes)
+                } else {
+                    prizeRepository.saveAllPrizes(prizes)
+                }
             }
         }
     }
 
     private fun loadPrizes(): List<Prize> {
-        val payload = runCatching {
-            kotlinx.coroutines.runBlocking {
-                httpClient.get(nobelConfig.apiUrl).body<String>()
-            }
+        return runCatching {
+            loadPrizesFromApi()
         }.getOrElse {
-            File(nobelConfig.seedFile).readText()
-        }
-
-        return json.decodeFromString<NobelPrizesPayload>(payload).nobelPrizes.map { prize ->
-            Prize(
-                id = prize.links.firstOrNull()?.href?.substringAfterLast("/nobelPrize/")?.replace("/", "-")
-                    ?: "${prize.category.en.lowercase()}-${prize.awardYear}",
-                awardYear = prize.awardYear,
-                category = LocalizedText(prize.category.en),
-                categoryFullName = LocalizedText(prize.categoryFullName.en),
-                dateAwarded = prize.dateAwarded,
-                prizeAmount = prize.prizeAmount,
-                prizeAmountAdjusted = prize.prizeAmountAdjusted,
-                detailLink = prize.links.firstOrNull()?.href,
-                laureates = prize.laureates.map { laureate ->
-                    Laureate(
-                        id = laureate.id,
-                        knownName = laureate.knownName?.en?.let(::LocalizedText),
-                        fullName = (laureate.fullName?.en ?: laureate.knownName?.en)?.let(::LocalizedText),
-                        motivation = laureate.motivation?.en?.let(::LocalizedText),
-                        portion = laureate.portion,
-                        sortOrder = laureate.sortOrder,
-                        portraitUrl = laureate.links.firstOrNull()?.href,
-                    )
-                },
-            )
+            val payload = File(nobelConfig.seedFile).readText()
+            json.decodeFromString<NobelPrizesPayload>(payload).nobelPrizes.map { it.toPrize() }
         }
     }
+
+    private fun loadPrizesFromApi(): List<Prize> = kotlinx.coroutines.runBlocking {
+        val prizes = mutableListOf<Prize>()
+        var offset = 0
+        var pageNumber = 1
+
+        while (true) {
+            val payload = httpClient.get(nobelConfig.apiUrl) {
+                parameter("limit", nobelConfig.pageSize)
+                parameter("offset", offset)
+                parameter("sort", "desc")
+            }.body<String>()
+
+            val page = json.decodeFromString<NobelPrizesPayload>(payload).nobelPrizes
+            if (page.isEmpty()) {
+                break
+            }
+
+            prizes += page.map { it.toPrize() }
+            logger.info(
+                "Loaded Nobel prizes page {}: {} items, total loaded {}",
+                pageNumber,
+                page.size,
+                prizes.size,
+            )
+            if (page.size < nobelConfig.pageSize) {
+                break
+            }
+
+            offset += nobelConfig.pageSize
+            pageNumber += 1
+        }
+
+        prizes
+    }
+
+    private fun NobelPrizeExternal.toPrize(): Prize = Prize(
+        id = links.firstOrNull()?.href?.substringAfterLast("/nobelPrize/")?.replace("/", "-")
+            ?: "${category.en.lowercase()}-$awardYear",
+        awardYear = awardYear,
+        category = LocalizedText(category.en),
+        categoryFullName = LocalizedText(categoryFullName.en),
+        dateAwarded = dateAwarded,
+        prizeAmount = prizeAmount,
+        prizeAmountAdjusted = prizeAmountAdjusted,
+        detailLink = links.firstOrNull()?.href,
+        laureates = laureates.map { laureate ->
+            Laureate(
+                id = laureate.id,
+                knownName = laureate.knownName?.en?.let(::LocalizedText),
+                fullName = (laureate.fullName?.en ?: laureate.knownName?.en)?.let(::LocalizedText),
+                motivation = laureate.motivation?.en?.let(::LocalizedText),
+                portion = laureate.portion,
+                sortOrder = laureate.sortOrder,
+                portraitUrl = laureate.links.firstOrNull()?.href,
+            )
+        },
+    )
 
     private fun Prize.toResponse(): PrizeResponse = PrizeResponse(
         id = id,

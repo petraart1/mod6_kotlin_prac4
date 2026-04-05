@@ -27,6 +27,7 @@ fun ApplicationEnvironment.readAppConfig(): AppConfig = AppConfig(
         apiUrl = propertyOrDefault("nobel.apiUrl", "https://api.nobelprize.org/2.1/nobelPrizes"),
         seedFile = propertyOrDefault("nobel.seedFile", "sample.json"),
         refreshOnRead = booleanPropertyOrDefault("nobel.refreshOnRead", true),
+        pageSize = intPropertyOrDefault("nobel.pageSize", 100),
     ),
 )
 

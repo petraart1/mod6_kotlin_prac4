@@ -5,6 +5,7 @@ import com.prac.model.Prize
 interface PrizeRepository {
     fun isEmpty(): Boolean
     fun saveAllPrizes(prizes: List<Prize>)
+    fun replaceAllPrizes(prizes: List<Prize>)
     fun getAllPrizes(): List<Prize>
     fun getPrizeById(prizeId: String): Prize?
     fun getPrizeByYearAndCategory(year: Int, category: String): Prize?

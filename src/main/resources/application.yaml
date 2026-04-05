@@ -22,4 +22,5 @@ database:
 nobel:
   apiUrl: "https://api.nobelprize.org/2.1/nobelPrizes"
   seedFile: "sample.json"
-  refreshOnRead: true
+  refreshOnRead: false
+  pageSize: 100
