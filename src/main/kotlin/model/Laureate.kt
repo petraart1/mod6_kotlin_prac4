@@ -7,4 +7,5 @@ data class Laureate(
     val motivation: LocalizedText? = null,
     val portion: String? = null,
     val sortOrder: String? = null,
+    val portraitUrl: String? = null,
 )

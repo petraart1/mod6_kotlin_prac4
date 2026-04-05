@@ -1,31 +1,25 @@
 package com.prac.plugins
 
-import com.prac.config.JwtConfig
-import com.prac.repository.InMemoryPrizeRepository
-import com.prac.repository.InMemoryUserRepository
+import com.prac.config.DatabaseFactory
+import com.prac.config.readAppConfig
+import com.prac.repository.impl.PrizeRepositoryImpl
+import com.prac.repository.impl.UserRepositoryImpl
 import com.prac.routing.configureRouting
 import com.prac.service.AuthService
 import com.prac.service.PrizeService
+import com.prac.service.UserService
 import io.ktor.server.application.*
 
 fun Application.configureRouting() {
-    val jwtConfig = JwtConfig(
-        domain = environment.propertyOrDefault("jwt.domain", "https://jwt-provider-domain/"),
-        audience = environment.propertyOrDefault("jwt.audience", "jwt-audience"),
-        realm = environment.propertyOrDefault("jwt.realm", "ktor sample app"),
-        secret = environment.propertyOrDefault("jwt.secret", "secret"),
-        ttlMinutes = environment.longPropertyOrDefault("jwt.ttlMinutes", 30L),
-    )
-    val userRepository = InMemoryUserRepository()
-    val prizeRepository = InMemoryPrizeRepository()
-    val authService = AuthService(userRepository, jwtConfig)
-    val prizeService = PrizeService(prizeRepository)
+    val appConfig = environment.readAppConfig()
+    DatabaseFactory.init(appConfig.database)
 
-    configureRouting(authService, prizeService)
+    val userRepository = UserRepositoryImpl()
+    userRepository.createDefaultUsersIfMissing()
+    val prizeRepository = PrizeRepositoryImpl()
+    val authService = AuthService(userRepository, appConfig.jwt)
+    val prizeService = PrizeService(prizeRepository, appConfig.nobel)
+    val userService = UserService(userRepository)
+
+    configureRouting(authService, prizeService, userService)
 }
-
-private fun ApplicationEnvironment.propertyOrDefault(path: String, defaultValue: String): String =
-    config.propertyOrNull(path)?.getString() ?: defaultValue
-
-private fun ApplicationEnvironment.longPropertyOrDefault(path: String, defaultValue: Long): Long =
-    config.propertyOrNull(path)?.getString()?.toLongOrNull() ?: defaultValue

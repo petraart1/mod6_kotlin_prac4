@@ -4,9 +4,22 @@ ktor:
       - com.prac.ApplicationKt.module
   deployment:
     port: 8080
+
 jwt:
   domain: "https://jwt-provider-domain/"
   audience: "jwt-audience"
   realm: "ktor sample app"
   secret: "qwertyuiqwertyuiqwertyuiqwertyui"
   ttlMinutes: 30
+
+database:
+  jdbcUrl: "jdbc:postgresql://ep-billowing-surf-agdo8xk6-pooler.c-2.eu-central-1.aws.neon.tech:5432/neondb?sslmode=require"
+  driverClassName: "org.postgresql.Driver"
+  username: "neondb_owner"
+  password: "npg_N4bEufaGZr2j"
+  maximumPoolSize: 5
+
+nobel:
+  apiUrl: "https://api.nobelprize.org/2.1/nobelPrizes"
+  seedFile: "sample.json"
+  refreshOnRead: true

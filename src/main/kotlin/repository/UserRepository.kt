@@ -1,5 +1,9 @@
 package com.prac.repository
 
+import com.prac.model.User
+
 interface UserRepository {
-    fun isValidUser(username: String, password: String): Boolean
+    fun findByUsername(username: String): User?
+    fun findById(id: String): User?
+    fun createDefaultUsersIfMissing()
 }

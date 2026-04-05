@@ -1,7 +1,6 @@
 package com.prac.plugins
 
-import com.asyncapi.kotlinasyncapi.context.service.AsyncApiExtension
-import com.asyncapi.kotlinasyncapi.ktor.AsyncApiPlugin
+import io.github.smiley4.ktoropenapi.OpenApi
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.*
 import io.ktor.server.plugins.calllogging.CallLogging
@@ -17,12 +16,11 @@ fun Application.configureHTTP() {
         json()
     }
 
-    install(AsyncApiPlugin) {
-        extension = AsyncApiExtension.builder {
-            info {
-                title("Sample API")
-                version("1.0.0")
-            }
+    install(OpenApi) {
+        info {
+            title = "Nobel Prize API"
+            version = "1.0.0"
+            description = "API for authentication, Nobel prizes and favorite prizes."
         }
     }
 }
